@@ -1,0 +1,30 @@
+var table = ee.FeatureCollection("projects/ee-longxue/assets/yellow_river_mask");
+var geometry = table
+var modisLST = ee.ImageCollection("MODIS/006/MOD13A1");
+var terra = modisLST
+  .filter(ee.Filter.data('kaishishijian','jieshushijian'))
+  select('bands','QCbands');
+print(terra)
+var maskClouds = function(image) {
+  var qcDay = image.select('QCbands')
+  var lstDay = image.select('bands')
+  var bitwiseExtract = function(input,fromBit,tobit) {
+  var maskSize = ee.Number(1).add(toBit).subtract(fromBit);
+  var mask = ee.Number(1).leftShift(maskSize).subtract(1);
+  return input.rightShift(fromBit).bitwiseAnd(mask);
+  };
+  var qaMask = bitwiseExtract(qcDay,0,0).eq(0)//yaogai
+  var dataQualityMask = bitwiseExtract(qcDay,3,4).eq(0)
+  var lstErrorMask = bitwiseExtract(qcDay,5,7).eq(0)
+  var mask = qaMask.and(dataQualityMask).and(lstErrorMask)
+  return lstDayMasked
+}
+var result = terra.map(maskClouds)
+print(result)
+var visit = ee.Image(result.first())
+var defaultVisualizationVis = {
+  min:0.0,
+  max:100.0,
+  palette:['ele4b4','999d60','2ec409','0a4b06']
+};
+Map.addLayer(visit,defaultVisualizationVis,'Lst Masked');
