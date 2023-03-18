@@ -1,0 +1,37 @@
+var roi = ee.FeatureCollection("projects/ee-longxue/assets/2");
+ 
+ 
+//select data you need
+var dataset = ee.ImageCollection('LANDSAT/LC08/C02/T1')
+                  .filterBounds(roi)
+                  .filterDate('2013-01-01', '2013-12-01')
+                  .select(['B4', 'B3', 'B2'])
+                  .map(function(image){
+                      return image.clip(roi)//裁剪
+                  })
+                 
+print("dataset",dataset)
+
+ 
+//Export Data
+function exportImageCollection(imgCol) {
+  var indexList = imgCol.reduceColumns(ee.Reducer.toList(), ["system:index"])
+                        .get("list");
+  indexList.evaluate(function(indexs) {
+    for (var i=0; i<indexs.length; i++) {
+      var image = imgCol.filter(ee.Filter.eq("system:index", indexs[i])).first();
+      image = image.toInt16();
+      Export.image.toDrive({
+        image: image,
+        description: indexs[i],
+        fileNamePrefix: indexs[i],
+        folder: 'LC05-2004',
+        region: roi,
+        scale: 30,
+        crs: "EPSG:4326",
+        maxPixels: 1e13
+      });
+    }
+  });
+}
+exportImageCollection(dataset);
