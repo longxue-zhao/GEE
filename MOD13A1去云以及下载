@@ -1,0 +1,47 @@
+var geometry = table //导入研究区域table
+var modisLST = ee.ImageCollection("MODIS/006/MOD13A1")
+var terra = modisLST
+  .filter(ee.Filter.date('2013-01-01', '2013-12-31'))
+  .select('NDVI','DetailedQA');
+print(terra)
+var maskClouds = function(image) {
+  var qcDay = image.select('DetailedQA')
+  var bitwiseExtract = function(input, fromBit, toBit) {
+  var maskSize = ee.Number(1).add(toBit).subtract(fromBit);
+  var mask = ee.Number(1).leftShift(maskSize).subtract(1);
+  return input.rightShift(fromBit).bitwiseAnd(mask);
+  };
+    var qaMask = bitwiseExtract(qcDay,0,1).eq(0)//yaogai
+  var dataQualityMask = bitwiseExtract(qcDay,2,5).eq(0)
+  var lstErrorMask = bitwiseExtract(qcDay,6,7).eq(0)
+  var adjacentCloudsMask = bitwiseExtract(qcDay,8,8).eq(0)
+  var BRDFMask = bitwiseExtract(qcDay,9,9).eq(1)
+  var mixedCloudsMask = bitwiseExtract(qcDay,10,10).eq(0)
+  var waterMask = bitwiseExtract(qcDay,11,12).eq(0)
+  var landMask = bitwiseExtract(qcDay,13,13).eq(1)
+  var snowMask = bitwiseExtract(qcDay,14,14).eq(0)
+  var shadowMask = bitwiseExtract(qcDay,15,15).eq(0)
+  var mask = qaMask.and(dataQualityMask).and(lstErrorMask).and(adjacentCloudsMask).and(BRDFMask).and(mixedCloudsMask).and(waterMask).and(landMask).and(snowMask).and(shadowMask)
+  var lstDayMasked = image.updateMask(mask)
+  return lstDayMasked
+}
+var result = terra.map(maskClouds).select('NDVI')
+print(result)
+var visit = ee.Image(result.first())
+var defaultVisualizationVis = {
+  //min: 0.0,
+  //max: 100.0,
+  palette: ['e1e4b4', '999d60', '2ec409', '0a4b06'],
+};
+Map.addLayer(visit, defaultVisualizationVis, 'LST Masked');
+
+Export.image.toDrive({
+  image: visit,
+  description: "2013_NDVI",  //文件描述信息
+  fileNamePrefix: "MODID_removeClouds",  //文件命名
+  scale: 500,  //分辨率设为500m，也可以改成更粗的
+  //region: roi,  //剪裁到研究区
+  maxPixels: 1e13,
+  crs: "EPSG:4326",  //设置投影
+  fileFormat: 'GeoTIFF'
+});
