@@ -1,8 +1,13 @@
 var geometry = table //导入研究区域table
+
 var modisLST = ee.ImageCollection("MODIS/006/MOD13A1")
 var terra = modisLST
-  .filter(ee.Filter.date('2013-01-01', '2013-12-31'))
-  .select('NDVI','DetailedQA');
+  .filter(ee.Filter.date('2014-01-01', '2014-12-31'))
+  .filterBounds(geometry)
+  .select('NDVI','DetailedQA')
+  .map(function(image){
+    return image.clip(geometry)
+  })
 print(terra)
 var maskClouds = function(image) {
   var qcDay = image.select('DetailedQA')
@@ -13,15 +18,15 @@ var maskClouds = function(image) {
   };
     var qaMask = bitwiseExtract(qcDay,0,1).eq(0)//yaogai
   var dataQualityMask = bitwiseExtract(qcDay,2,5).eq(0)
-  var lstErrorMask = bitwiseExtract(qcDay,6,7).eq(0)
+  //var lstErrorMask = bitwiseExtract(qcDay,6,7).eq(0)
   var adjacentCloudsMask = bitwiseExtract(qcDay,8,8).eq(0)
-  var BRDFMask = bitwiseExtract(qcDay,9,9).eq(1)
+  //var BRDFMask = bitwiseExtract(qcDay,9,9).eq(1)
   var mixedCloudsMask = bitwiseExtract(qcDay,10,10).eq(0)
-  var waterMask = bitwiseExtract(qcDay,11,12).eq(0)
-  var landMask = bitwiseExtract(qcDay,13,13).eq(1)
-  var snowMask = bitwiseExtract(qcDay,14,14).eq(0)
-  var shadowMask = bitwiseExtract(qcDay,15,15).eq(0)
-  var mask = qaMask.and(dataQualityMask).and(lstErrorMask).and(adjacentCloudsMask).and(BRDFMask).and(mixedCloudsMask).and(waterMask).and(landMask).and(snowMask).and(shadowMask)
+  //var waterMask = bitwiseExtract(qcDay,11,12).eq(0)
+  //var landMask = bitwiseExtract(qcDay,13,13).eq(1)
+  //var snowMask = bitwiseExtract(qcDay,14,14).eq(0)
+  //var shadowMask = bitwiseExtract(qcDay,15,15).eq(0)
+  var mask = qaMask.and(dataQualityMask).and(adjacentCloudsMask).and(mixedCloudsMask)
   var lstDayMasked = image.updateMask(mask)
   return lstDayMasked
 }
@@ -34,14 +39,30 @@ var defaultVisualizationVis = {
   palette: ['e1e4b4', '999d60', '2ec409', '0a4b06'],
 };
 Map.addLayer(visit, defaultVisualizationVis, 'LST Masked');
+//-------------------------------------------------------------------------------------------
+//select data you need
+var dataset = result
+print("dataset",dataset)
 
-Export.image.toDrive({
-  image: visit,
-  description: "2013_NDVI",  //文件描述信息
-  fileNamePrefix: "MODID_removeClouds",  //文件命名
-  scale: 500,  //分辨率设为500m，也可以改成更粗的
-  //region: roi,  //剪裁到研究区
-  maxPixels: 1e13,
-  crs: "EPSG:4326",  //设置投影
-  fileFormat: 'GeoTIFF'
-});
+//Export Data
+function exportImageCollection(imgCol) {
+  var indexList = imgCol.reduceColumns(ee.Reducer.toList(), ["system:index"])
+                        .get("list");
+  indexList.evaluate(function(indexs) {
+    for (var i=0; i<indexs.length; i++) {
+      var image = imgCol.filter(ee.Filter.eq("system:index", indexs[i])).first();
+      image = image.toInt16();
+      Export.image.toDrive({
+        image: image,
+        description: indexs[i],
+        fileNamePrefix: indexs[i],
+        folder: 'MODIS',
+        region: geometry,
+        scale: 500,
+        crs: "EPSG:4326",
+        maxPixels: 1e13
+      });
+    }
+  });
+}
+exportImageCollection(dataset);
