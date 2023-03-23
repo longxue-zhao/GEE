@@ -1,0 +1,104 @@
+//《Water Benefit-based Ecological Index for Urban Ecological Environment Quality Assessments》
+// 顾及水效益的生态环境质量评价方法，论文链接：https://ieeexplore.ieee.org/document/9492814
+// 第一步:定义研究区，自行更换自己的研究区
+var geometry0 = table
+Map.centerObject(geometry0);
+
+//图例，红-蓝，1-0
+var visParam = {
+    palette: '040274, 040281, 0502a3, 0502b8, 0502ce, 0502e6, 0602ff, 235cb1, 307ef3, 269db1, 30c8e2, 32d3ef, 3be285, 3ff38f, 86e26f, 3ae237, b5e22e, d6e21f, fff705, ffd611, ffb613, ff8b13, ff6e08, ff500d, ff0000, de0101, c21301, a71001, 911003'
+ };
+
+//定义降采样参数，便于计算
+var reduceScale = 500;
+
+// 定义合成影像开始结束时间
+var date_start = '2019-06-01';
+var date_end = '2019-10-30';
+//=====================================================quyunhanshu============================================================
+function maskL8sr(image) {
+  // The third bit is cloud and the fourth bit is cloudshadow
+  var cloudShadowBitMask = 1 << 4;
+  var cloudsBitMask = 1 << 3;
+  // Get QA_PIXEL band.
+  var qa = image.select('QA_PIXEL');
+  // Set the cloud mask to zero
+  var mask = qa.bitwiseAnd(cloudShadowBitMask).eq(0)
+      .and(qa.bitwiseAnd(cloudsBitMask).eq(0));
+  // Update the cloudmask
+  return image.updateMask(mask)
+      .select("SR_B.*")
+      .copyProperties(image, ["system:time_start"]);
+}
+//===================================================huoqushuju============================================================
+//第二步:加载LST影像数据集合
+var LSTimg = ee.ImageCollection("LANDSAT/LC08/C02/T1_L2")
+           .filterBounds(geometry0)
+           .filterDate(date_start, date_end)
+           .filter(ee.Filter.lte('CLOUD_COVER',5))
+           .map(maskL8sr)
+           .median()
+           .clip(geometry0);
+LSTimg = LSTimg.uint16();
+print(LSTimg);// visualize the datasets
+var rgbVis = {
+  min: 8400,
+  max: 15000,
+  gamma:1.5,
+  bands: ['SR_B4', 'SR_B3', 'SR_B2'],
+};
+
+Map.addLayer(LSTimg,rgbVis,'LSTimg');
+var imgselect = LSTimg.select('SR_B2','SR_B3','SR_B4','SR_B5');
+//-==================================================gezhonghanshu================================================================
+//第三步：构造SPWI指数函数: (B5 - B7 + B2)/(B5 + B7 + B2) ===================================================(1)
+function SPWI(image,roi,reduceScale) {
+    var nir = image.select('B5');
+    var swir2 = image.select('B7');
+    var blue = image.select('B2');
+    var SPWI0 = (nir.subtract(swir2).add(blue)).divide(nir.add(swir2).add(blue)).rename("SPWI")
+    var dic = SPWI0.reduceRegion(ee.Reducer.percentile([5, 95]), roi, reduceScale);
+    var p5 = ee.Number(ee.Dictionary(dic).get("SPWI_p5"));
+    var p95 = ee.Number(ee.Dictionary(dic).get("SPWI_p95"));
+    var SPWI = SPWI0.where(SPWI0.select('SPWI').gt(p95), p95).where(SPWI0.select('SPWI').lt(p5), p5);
+    var nSPWI = SPWI.subtract(p5).divide(ee.Number(p95).subtract(p5));
+    return nSPWI;
+}
+
+//第三步：构造NDLI指数函数: (B3 - B4)/(B3 + B4 + B6)=======================================================(2)
+function NDLI(image,roi,reduceScale) {
+    var green = image.select('B3');
+    var red = image.select('B4');
+    var swir1 = image.select('B6');
+    var NDLI0 = (green.subtract(red)).divide(green.add(red).add(swir1)).rename("NDLI")
+    var dic = NDLI0.reduceRegion(ee.Reducer.percentile([5, 95]), roi, reduceScale);
+    var p5 = ee.Number(ee.Dictionary(dic).get("NDLI_p5"));
+    var p95 = ee.Number(ee.Dictionary(dic).get("NDLI_p95"));
+    var NDLI = NDLI0.where(NDLI0.select('NDLI').gt(p95), p95).where(NDLI0.select('NDLI').lt(p5), p5);
+    var nNDLI = NDLI.subtract(p5).divide(ee.Number(p95).subtract(p5));
+    print(nNDLI)
+    return nNDLI;
+}
+//第三步：构造NDSI指数函数: (B6 - B5)/(B6 + B5)=============================================================(3)
+function NDSI(image,roi,reduceScale) {
+    var NDSI0 = image.select("B6").subtract(image.select("B5"))
+        .divide(image.select("B6").add(image.select("B5"))).rename("NDSI")
+    var dic = NDSI0.reduceRegion(ee.Reducer.percentile([5, 95]), roi, reduceScale);
+    var p5 = ee.Number(ee.Dictionary(dic).get("NDSI_p5"));
+    var p95 = ee.Number(ee.Dictionary(dic).get("NDSI_p95"));
+    var NDSI = NDSI0.where(NDSI0.select('NDSI').gt(p95), p95).where(NDSI0.select('NDSI').lt(p5), p5);
+    var nNDSI = NDSI.subtract(p5).divide(ee.Number(p95).subtract(p5));
+    return nNDSI;
+}
+//第三步：构造RVI指数函数:B5/B4=============================================================================(4)
+function RVI(image,roi,reduceScale) {
+    var NIR = image.select(['B5']);
+    var R = image.select(['B4']);
+    var rvi0 = NIR.divide(R).rename('RVI');
+    var dic = rvi0.reduceRegion(ee.Reducer.percentile([5, 95]), roi, reduceScale);
+    var p5 = ee.Number(ee.Dictionary(dic).get("RVI_p5"));
+    var p95 = ee.Number(ee.Dictionary(dic).get("RVI_p95"));
+    var RVI = rvi0.where(rvi0.select('RVI').gt(p95), p95).where(rvi0.select('RVI').lt(p5), p5);
+    var nRVI = RVI.subtract(p5).divide(ee.Number(p95).subtract(p5));
+    return nRVI;
+}
