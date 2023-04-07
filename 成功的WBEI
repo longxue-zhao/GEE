@@ -1,4 +1,4 @@
-# G//《Water Benefit-based Ecological Index for Urban Ecological Environment Quality Assessments》
+//《Water Benefit-based Ecological Index for Urban Ecological Environment Quality Assessments》
 // 顾及水效益的生态环境质量评价方法，论文链接：https://ieeexplore.ieee.org/document/9492814
 // ====================================第一步:定义研究区，自行更换自己的研究区===================================
 var geometry0 = table
@@ -187,4 +187,4 @@ folder: '484WBEI',
 description: '2013_14_WBEI', //导出描述
 scale: 30, //分辨率(m)
 region: geometry0 //导出的矢量范围
-})EE
+})
