@@ -79,8 +79,8 @@ function maskL8sr(image) {
            var thermalBands = image.select('ST_B.*').multiply(0.00341802).add(149.0); // 这里就是对我们要得到的地表温度波段进行计算。
            return image.addBands(opticalBands, null, true)
            .addBands(thermalBands, null, true)
-          // .updateMask(qaMask)
-          // .updateMask(saturationMask);
+           .updateMask(qaMask)
+           .updateMask(saturationMask);
 }
 function LST(image,roi,reduceScale) {
          var img = image.select("ST_B10")
@@ -183,7 +183,8 @@ Map.addLayer(nWBEI, visParam1, "nWBEI");
 // Export the image, specifying scale and region.
 Export.image.toDrive({
 image: nWBEI, //导出的图像名
-description: 'normalized WBEI', //导出描述
+folder: '484WBEI',
+description: '2013_14_WBEI', //导出描述
 scale: 30, //分辨率(m)
 region: geometry0 //导出的矢量范围
 })EE
